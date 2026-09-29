@@ -10,80 +10,70 @@
 href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-
 body {
     margin: 0;
     font-family: Arial, sans-serif;
-    background: #f4f4f4;
+    background: #f5f5f5;
 }
 
 h1 {
     text-align: center;
-    margin: 18px 0 5px;
+    margin: 16px 0 5px;
 }
 
-.aciklama {
+#aciklama {
     text-align: center;
-    margin-bottom: 15px;
+    margin-bottom: 12px;
     color: #555;
 }
 
 #map {
     width: 96%;
-    height: 75vh;
+    height: 76vh;
     margin: auto;
+    background: #dceef7;
     border: 1px solid #aaa;
     border-radius: 10px;
-    background: #dceef7;
 }
 
 .legend {
     text-align: center;
-    margin: 15px;
-    font-size: 15px;
+    margin: 14px;
 }
 
 .box {
     display: inline-block;
-    width: 17px;
-    height: 17px;
+    width: 16px;
+    height: 16px;
     margin-left: 18px;
     margin-right: 5px;
-    vertical-align: middle;
     border: 1px solid #777;
+    vertical-align: middle;
 }
 
 .province-label {
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
-
     font-size: 10px;
     font-weight: bold;
     color: #222;
-
     text-align: center;
-
-    width: 80px !important;
-    margin-left: -40px !important;
-
+    white-space: nowrap;
     pointer-events: none;
 }
-
 </style>
 </head>
-
 
 <body>
 
 <h1>🇹🇷 Türkiye Gezi Haritam</h1>
 
-<div class="aciklama">
-Her tıklamada ilin durumu değişir • Sağ tık ile sıfırlanır
+<div id="aciklama">
+Tıkla: Gezdim → Yakında → Uzun Vadede &nbsp; | &nbsp; Sağ tık: Sıfırla
 </div>
 
 <div id="map"></div>
-
 
 <div class="legend">
 
@@ -94,7 +84,7 @@ Gezdim
 Yakında Gideceğim
 
 <span class="box" style="background:#5793d1"></span>
-Uzun Vadede Gideceğim
+Uzun Vadede
 
 <span class="box" style="background:#eeeeee"></span>
 Seçilmedi
@@ -107,182 +97,140 @@ Seçilmedi
 <script>
 
 const map = L.map("map", {
-    zoomControl: true,
     attributionControl: false
 });
 
-const colors = {
-    0: "#eeeeee",
-    1: "#55b86a",
-    2: "#f0a33b",
-    3: "#5793d1"
-};
+const colors = [
+    "#eeeeee",
+    "#55b86a",
+    "#f0a33b",
+    "#5793d1"
+];
 
+let saved =
+JSON.parse(localStorage.getItem("turkiyeGeziHaritasi") || "{}");
 
-// Daha önce yaptığımız seçimleri Chrome'dan yükle
-
-let saved = JSON.parse(
-    localStorage.getItem("turkiyeGeziHaritasi") || "{}"
-);
-
-
-// Türkiye il sınırları
 
 const geojsonURL =
-"https://geodata.ucdavis.edu/gadm/gadm4.1/json/gadm41_TUR_1.json";
+"https://raw.githubusercontent.com/ttezer/turkiye-harita-verisi/master/dist/geojson/provinces.geojson";
 
 
 fetch(geojsonURL)
 
-.then(response => response.json())
+.then(response => {
+
+    if (!response.ok) {
+        throw new Error("Harita dosyası yüklenemedi");
+    }
+
+    return response.json();
+
+})
 
 .then(data => {
 
 
-const turkeyLayer = L.geoJSON(data, {
+    console.log("GeoJSON yüklendi:", data);
 
 
-style: function(feature) {
-
-    const name = feature.properties.NAME_1;
-
-    const state = saved[name] || 0;
-
-    return {
-
-        color: "#ffffff",
-
-        weight: 1.5,
-
-        fillColor: colors[state],
-
-        fillOpacity: 1
-
-    };
-
-},
+    const turkeyLayer = L.geoJSON(data, {
 
 
-onEachFeature: function(feature, provinceLayer) {
+        style: function(feature) {
+
+            const name = getProvinceName(feature);
+
+            const state = saved[name] || 0;
+
+            return {
+                color: "#ffffff",
+                weight: 1.2,
+                fillColor: colors[state],
+                fillOpacity: 1
+            };
+
+        },
 
 
-    const name = feature.properties.NAME_1;
+        onEachFeature: function(feature, layer) {
 
 
-    // --------------------------
-    // NORMAL TIK
-    // --------------------------
-
-    provinceLayer.on("click", function() {
+            const name = getProvinceName(feature);
 
 
-        let state = saved[name] || 0;
+            /* NORMAL TIK */
+
+            layer.on("click", function() {
+
+                let state = saved[name] || 0;
+
+                state++;
+
+                if (state > 3) {
+                    state = 1;
+                }
+
+                saved[name] = state;
+
+                save();
+
+                layer.setStyle({
+                    fillColor: colors[state]
+                });
+
+            });
 
 
-        state++;
+
+            /* SAĞ TIK */
+
+            layer.on("contextmenu", function(e) {
+
+                L.DomEvent.preventDefault(e);
+
+                delete saved[name];
+
+                save();
+
+                layer.setStyle({
+                    fillColor: colors[0]
+                });
+
+            });
 
 
-        // 1 → Gezdim
-        // 2 → Yakında
-        // 3 → Uzun vadede
-        // 4. tık tekrar Gezdim
 
-        if (state > 3) {
-            state = 1;
+            /* İL İSMİ */
+
+            const center = layer.getBounds().getCenter();
+
+            L.marker(center, {
+
+                interactive: false,
+
+                icon: L.divIcon({
+
+                    className: "province-label",
+
+                    html: name,
+
+                    iconSize: [100, 20],
+
+                    iconAnchor: [50, 10]
+
+                })
+
+            }).addTo(map);
+
         }
-
-
-        saved[name] = state;
-
-
-        localStorage.setItem(
-            "turkiyeGeziHaritasi",
-            JSON.stringify(saved)
-        );
-
-
-        provinceLayer.setStyle({
-
-            fillColor: colors[state]
-
-        });
-
-
-    });
-
-
-
-    // --------------------------
-    // SAĞ TIK
-    // --------------------------
-
-    provinceLayer.on("contextmenu", function(e) {
-
-
-        L.DomEvent.preventDefault(e);
-
-
-        delete saved[name];
-
-
-        localStorage.setItem(
-            "turkiyeGeziHaritasi",
-            JSON.stringify(saved)
-        );
-
-
-        provinceLayer.setStyle({
-
-            fillColor: colors[0]
-
-        });
-
-
-    });
-
-
-
-    // --------------------------
-    // İL İSMİNİ HARİTAYA YAZ
-    // --------------------------
-
-    const center =
-        provinceLayer.getBounds().getCenter();
-
-
-    L.marker(center, {
-
-        interactive: false,
-
-        icon: L.divIcon({
-
-            className: "province-label",
-
-            html: name,
-
-            iconSize: [80, 20],
-
-            iconAnchor: [40, 10]
-
-        })
 
     }).addTo(map);
 
 
-}
-
-
-}).addTo(map);
-
-
-// Türkiye'yi ekrana tam sığdır
-
-map.fitBounds(
-    turkeyLayer.getBounds(),
-    {
-        padding: [15,15]
-    }
-);
+    map.fitBounds(
+        turkeyLayer.getBounds(),
+        { padding: [10,10] }
+    );
 
 
 })
@@ -292,10 +240,108 @@ map.fitBounds(
 
     console.error(error);
 
-    alert("Türkiye haritası yüklenirken hata oluştu.");
+    alert(
+        "Harita yüklenemedi. Sayfayı yenileyin."
+    );
 
 });
 
+
+
+/* ------------------------------------
+   İL ADINI BUL
+------------------------------------ */
+
+function getProvinceName(feature) {
+
+    const p = feature.properties || {};
+
+
+    /*
+    Bu fonksiyon farklı GeoJSON isimlendirmelerini
+    otomatik olarak kontrol eder.
+    */
+
+    const possibleNames = [
+
+        p.name,
+        p.NAME,
+        p.NAME_1,
+        p.Name,
+        p.ad,
+        p.AD,
+        p.il,
+        p.IL,
+        p.il_adi,
+        p.IL_ADI,
+        p.province,
+        p.PROVINCE,
+        p.city,
+        p.CITY_NAME,
+        p.sehir,
+        p["Şehir_Ad"]
+
+    ];
+
+
+    for (const value of possibleNames) {
+
+        if (
+            value !== undefined &&
+            value !== null &&
+            String(value).trim() !== ""
+        ) {
+
+            return String(value);
+
+        }
+
+    }
+
+
+    /*
+    Yukarıdaki isimlerden hiçbiri yoksa,
+    properties içindeki değerleri kontrol et.
+    "İl" gibi tip bilgisini isim olarak kullanma.
+    */
+
+    for (const key in p) {
+
+        const value = p[key];
+
+        if (
+            typeof value === "string" &&
+            value.length >= 3 &&
+            value.length <= 25 &&
+            value.toLowerCase() !== "il" &&
+            value.toLowerCase() !== "province" &&
+            !value.startsWith("TR-")
+        ) {
+
+            return value;
+
+        }
+
+    }
+
+
+    return "?";
+}
+
+
+
+/* ------------------------------------
+   KAYDET
+------------------------------------ */
+
+function save() {
+
+    localStorage.setItem(
+        "turkiyeGeziHaritasi",
+        JSON.stringify(saved)
+    );
+
+}
 
 </script>
 
