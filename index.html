@@ -6,198 +6,296 @@
 
 <title>Türkiye Gezi Haritam</title>
 
-<link
-  rel="stylesheet"
-  href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-/>
+<link rel="stylesheet"
+href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-  body {
+
+body {
     margin: 0;
     font-family: Arial, sans-serif;
-    background: #f5f5f5;
-  }
+    background: #f4f4f4;
+}
 
-  h1 {
+h1 {
     text-align: center;
-    margin-bottom: 5px;
-  }
+    margin: 18px 0 5px;
+}
 
-  .aciklama {
+.aciklama {
     text-align: center;
     margin-bottom: 15px;
-  }
+    color: #555;
+}
 
-  #map {
-    width: 95%;
+#map {
+    width: 96%;
     height: 75vh;
     margin: auto;
     border: 1px solid #aaa;
     border-radius: 10px;
-  }
+    background: #dceef7;
+}
 
-  .legend {
+.legend {
     text-align: center;
     margin: 15px;
-    font-size: 16px;
-  }
+    font-size: 15px;
+}
 
-  .box {
+.box {
     display: inline-block;
-    width: 16px;
-    height: 16px;
-    margin-left: 15px;
+    width: 17px;
+    height: 17px;
+    margin-left: 18px;
     margin-right: 5px;
     vertical-align: middle;
-  }
+    border: 1px solid #777;
+}
 
-  .province-label {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    font-weight: bold;
+.province-label {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+
     font-size: 10px;
+    font-weight: bold;
     color: #222;
+
     text-align: center;
-  }
+
+    width: 80px !important;
+    margin-left: -40px !important;
+
+    pointer-events: none;
+}
+
 </style>
 </head>
+
 
 <body>
 
 <h1>🇹🇷 Türkiye Gezi Haritam</h1>
 
 <div class="aciklama">
-İle tıklayarak durumunu değiştir • Sağ tık ile temizle
+Her tıklamada ilin durumu değişir • Sağ tık ile sıfırlanır
 </div>
 
 <div id="map"></div>
 
+
 <div class="legend">
-  <span class="box" style="background:#55b86a"></span> Gezdim
-  <span class="box" style="background:#f0a33b"></span> Yakında Gideceğim
-  <span class="box" style="background:#5793d1"></span> Uzun Vadede
-  <span class="box" style="background:#dddddd"></span> Seçilmedi
+
+<span class="box" style="background:#55b86a"></span>
+Gezdim
+
+<span class="box" style="background:#f0a33b"></span>
+Yakında Gideceğim
+
+<span class="box" style="background:#5793d1"></span>
+Uzun Vadede Gideceğim
+
+<span class="box" style="background:#eeeeee"></span>
+Seçilmedi
+
 </div>
+
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
 
-const map = L.map('map', {
-  zoomControl: true
-}).setView([39, 35], 6);
+const map = L.map("map", {
+    zoomControl: true,
+    attributionControl: false
+});
 
-const colors = [
-  "#dddddd",
-  "#55b86a",
-  "#f0a33b",
-  "#5793d1"
-];
+const colors = {
+    0: "#eeeeee",
+    1: "#55b86a",
+    2: "#f0a33b",
+    3: "#5793d1"
+};
 
-let saved = JSON.parse(localStorage.getItem("turkiyeGeziHaritasi") || "{}");
+
+// Daha önce yaptığımız seçimleri Chrome'dan yükle
+
+let saved = JSON.parse(
+    localStorage.getItem("turkiyeGeziHaritasi") || "{}"
+);
+
+
+// Türkiye il sınırları
 
 const geojsonURL =
-"https://raw.githubusercontent.com/ttezer/turkiye-harita-verisi/master/dist/geojson/provinces.geojson";
+"https://geodata.ucdavis.edu/gadm/gadm4.1/json/gadm41_TUR_1.json";
+
 
 fetch(geojsonURL)
+
 .then(response => response.json())
+
 .then(data => {
 
-  const layer = L.geoJSON(data, {
 
-    style: function(feature) {
+const turkeyLayer = L.geoJSON(data, {
 
-      const name =
-        feature.properties.name ||
-        feature.properties.NAME_1 ||
-        feature.properties.NAME ||
-        feature.properties.il_adi ||
-        feature.properties.ad ||
-        "İl";
 
-      const state = saved[name] || 0;
+style: function(feature) {
 
-      return {
+    const name = feature.properties.NAME_1;
+
+    const state = saved[name] || 0;
+
+    return {
+
         color: "#ffffff",
-        weight: 1,
+
+        weight: 1.5,
+
         fillColor: colors[state],
+
         fillOpacity: 1
-      };
-    },
 
-    onEachFeature: function(feature, provinceLayer) {
+    };
 
-      const name =
-        feature.properties.name ||
-        feature.properties.NAME_1 ||
-        feature.properties.NAME ||
-        feature.properties.il_adi ||
-        feature.properties.ad ||
-        "İl";
+},
 
-      provinceLayer.on("click", function() {
+
+onEachFeature: function(feature, provinceLayer) {
+
+
+    const name = feature.properties.NAME_1;
+
+
+    // --------------------------
+    // NORMAL TIK
+    // --------------------------
+
+    provinceLayer.on("click", function() {
+
 
         let state = saved[name] || 0;
 
+
         state++;
 
+
+        // 1 → Gezdim
+        // 2 → Yakında
+        // 3 → Uzun vadede
+        // 4. tık tekrar Gezdim
+
         if (state > 3) {
-          state = 1;
+            state = 1;
         }
+
 
         saved[name] = state;
 
+
         localStorage.setItem(
-          "turkiyeGeziHaritasi",
-          JSON.stringify(saved)
+            "turkiyeGeziHaritasi",
+            JSON.stringify(saved)
         );
 
+
         provinceLayer.setStyle({
-          fillColor: colors[state]
+
+            fillColor: colors[state]
+
         });
 
-      });
 
-      provinceLayer.on("contextmenu", function(e) {
+    });
+
+
+
+    // --------------------------
+    // SAĞ TIK
+    // --------------------------
+
+    provinceLayer.on("contextmenu", function(e) {
+
 
         L.DomEvent.preventDefault(e);
 
+
         delete saved[name];
 
+
         localStorage.setItem(
-          "turkiyeGeziHaritasi",
-          JSON.stringify(saved)
+            "turkiyeGeziHaritasi",
+            JSON.stringify(saved)
         );
 
+
         provinceLayer.setStyle({
-          fillColor: colors[0]
+
+            fillColor: colors[0]
+
         });
 
-      });
 
-      const center = provinceLayer.getBounds().getCenter();
+    });
 
-      L.marker(center, {
+
+
+    // --------------------------
+    // İL İSMİNİ HARİTAYA YAZ
+    // --------------------------
+
+    const center =
+        provinceLayer.getBounds().getCenter();
+
+
+    L.marker(center, {
+
         interactive: false,
+
         icon: L.divIcon({
-          className: "province-label",
-          html: name,
-          iconSize: [80,20]
+
+            className: "province-label",
+
+            html: name,
+
+            iconSize: [80, 20],
+
+            iconAnchor: [40, 10]
+
         })
-      }).addTo(map);
 
+    }).addTo(map);
+
+
+}
+
+
+}).addTo(map);
+
+
+// Türkiye'yi ekrana tam sığdır
+
+map.fitBounds(
+    turkeyLayer.getBounds(),
+    {
+        padding: [15,15]
     }
+);
 
-  }).addTo(map);
-
-  map.fitBounds(layer.getBounds());
 
 })
+
+
 .catch(error => {
-  console.error(error);
-  alert("Harita verisi yüklenemedi.");
+
+    console.error(error);
+
+    alert("Türkiye haritası yüklenirken hata oluştu.");
+
 });
+
 
 </script>
 
